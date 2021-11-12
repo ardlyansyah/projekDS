@@ -1,0 +1,11 @@
+---
+title: "Untitled"
+author: "Ardlyansyah_123190112"
+date: "11/12/2021"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
