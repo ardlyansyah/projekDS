@@ -1,0 +1,290 @@
+---
+title: "Untitled"
+author: "Ardlyansyah_123190112 & Dewi Zunufi Setiawati_123190117"
+date: "11/17/2021"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r visualisasi1}
+library(e1071) 
+library(caret) 
+library(syuzhet) 
+library(ggplot2)
+library(vroom)
+
+reviewData <- read.csv("reviewclean.csv",stringsAsFactors = FALSE)
+review <- as.character(reviewData$text)
+s <- get_nrc_sentiment(review)
+
+review_combine <- cbind(reviewData$text,s) 
+par(mar=rep(3,4))
+a <- barplot(colSums(s), col = rainbow(10), main='Sentiment Analysys Donald Trump on Twitter')
+brplt <- a
+```
+
+```{r visualisasi2}
+#Plot 2- sentimen positif dan negatif
+getsentiment <- function(x){
+  #transpose
+  tx<-data.frame(t(x))
+  #The function rowSums computes column sums across rows for each level of a grouping variable.
+  tx_new <- data.frame(rowSums(tx[2:900]))
+  #Transformation anx cleaning
+  names(tx_new)[1] <- "count"
+  tx_new <- cbind("sentiment" = rownames(tx_new), tx_new)
+  rownames(tx_new) <- NULL
+  tx_new2<-tx_new[1:10,]
+}
+#Plot One - count of words associated with each sentiment
+review1 <- getsentiment(s)
+quickplot(sentiment, data=review1[9:10,], weight=count, geom="bar", fill=sentiment, ylab="count")+ggtitle("Sentiment Analysys Donald Trump on Twitter")
+```
+
+```{r visualisasi4}
+slices <- c(colSums(s))
+lbls <- c("Anger", "Anticipation", "Disgust", "Fear", "Joy", "Sadness", "surprise", "Trust", "Negative", "Positive")
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct, sep = " ")
+lbls <- paste(lbls,"%", sep = "")
+
+piechart = pie(slices,labels = lbls, col=rainbow(length(lbls)),
+    main="Pie Chart Sentiment Analysys Emotions")
+```
+
+```{r visualisasi3}
+#library untuk penggunaan corpus dalam cleaning data
+library(tm)
+library(RTextTools)
+#library yang terdapat sebuah algoritma naivebayes
+library(e1071)
+library(dplyr)
+library(caret)
+
+df<-read.csv("reviewclean.csv",stringsAsFactors = FALSE)
+glimpse(df)
+
+#Set the seed of R‘s random number generator, which is useful for creating simulations or random objects that can be reproduced.
+set.seed(20)
+df<-df[sample(nrow(df)),]
+df<-df[sample(nrow(df)),]
+glimpse(df)
+
+corpus<-Corpus(VectorSource(df$text))
+corpus
+inspect(corpus[1:10])
+#fungsinya untuk membersihkan data data yang tidak dibutuhkan 
+corpus.clean<-corpus%>%
+    tm_map(content_transformer(tolower))%>%
+    tm_map(removePunctuation)%>%
+    tm_map(removeNumbers)%>%
+    tm_map(removeWords,stopwords(kind="en"))%>%
+    tm_map(stripWhitespace)
+dtm<-DocumentTermMatrix(corpus.clean)
+
+inspect(dtm[1:10,1:20])
+
+df.train<-df[1:50,]
+df.test<-df[51:100,]
+
+dtm.train<-dtm[1:50,]
+dtm.test<-dtm[51:100,]
+
+corpus.clean.train<-corpus.clean[1:50]
+corpus.clean.test<-corpus.clean[51:100]
+
+dim(dtm.train)
+fivefreq<-findFreqTerms(dtm.train,5)
+length(fivefreq)
+
+dtm.train.nb<-DocumentTermMatrix(corpus.clean.train,control = list(dictionary=fivefreq))
+
+dtm.test.nb<-DocumentTermMatrix(corpus.clean.test,control = list(dictionary=fivefreq))
+
+dim(dtm.test.nb)
+ 
+convert_count <- function(x){
+    y<-ifelse(x>0,1,0)
+    y<-factor(y,levels=c(0,1),labels=c("no","yes"))
+    y
+}
+trainNB<-apply(dtm.train.nb,2,convert_count)
+testNB<-apply(dtm.test.nb,1,convert_count)
+
+
+library(wordcloud)
+wordcloud(corpus.clean,min.freq = 4, scale = (c(6,0.7)) ,max.words=100,random.order=F,colors=brewer.pal(8,"Dark2"))
+```
+
+```{r global}
+library(shiny)
+library(dplyr)
+library(plotly)
+library(here)
+x = 1
+sentimen <- read.csv( here("Trump_tweets_sentiment.csv"), nrows = 10000)
+location <- unique(sentimen[["from_user_timezone"]])
+chart = c("Emotion Analysys","Piechart","Wordcloud")
+```
+
+
+```{r UI}
+ui <- fluidPage(
+  title = "Sentiment Analysys",
+  headerPanel("Sentiment Analysys Donald Trump on Twitter"),
+  sidebarLayout(
+    sidebarPanel(
+      tabsetPanel(id = "tabs",
+                  tabPanel("Menu",
+                  selectInput(inputId = "location",
+                  label =  "location",
+                  choices = location,
+                  selected = location[[1]]),
+                  
+                  selectInput(inputId = "chart",
+                  label = "Chart",
+                  choices = chart,
+                  selected = " ",)
+                  ),
+                  ),
+    ),
+    mainPanel(
+    DT::dataTableOutput('tbl'),
+    plotOutput('plot'),
+    
+    )
+  )
+  )
+```
+
+
+```{r server}
+server <- function(input, output, session) {
+  
+  output$tbl = DT::renderDataTable({
+    new_df <- select(sentimen, text)
+    new_df2 = filter(new_df, sentimen$from_user_timezone == input$location)
+    DT::datatable(new_df2, options = list(lengthChange = FALSE))
+  })
+  
+  output$plot = renderPlot({
+    new_df <- select(sentimen, text)
+    new_df2 = filter(new_df, sentimen$from_user_timezone == input$location)
+    
+ulasan <- new_df2$text
+ulasan1 <- Corpus(VectorSource(ulasan))
+removeURL <- function(x) gsub("http[^[:space:]]*", "", x)
+reviewclean <- tm_map(ulasan1, removeURL)
+removeNL <- function(y) gsub("\n", " ", y)
+reviewclean <- tm_map(reviewclean, removeNL)
+replacecomma <- function(y) gsub(",", "", y)
+reviewclean <- tm_map(reviewclean, replacecomma)
+removetitik2 <- function(y) gsub(":", "", y)
+reviewclean <- tm_map(reviewclean, removetitik2)
+removetitikkoma <- function(y) gsub(";", " ", y)
+reviewclean <- tm_map(reviewclean, removetitikkoma)
+removetitik3 <- function(y) gsub("p…", "", y)
+reviewclean <- tm_map(reviewclean, removetitik3)
+removeamp <- function(y) gsub("&amp;", "", y)
+reviewclean <- tm_map(reviewclean, removeamp)
+removeUN <- function(z) gsub("@\\w+", "", z)
+reviewclean <- tm_map(reviewclean, removeUN)
+remove.all <- function(xy) gsub("[^[:alpha:][:space:]]*", "", xy)
+reviewclean <- tm_map(reviewclean,remove.all)
+reviewclean <- tm_map(reviewclean, removePunctuation)
+reviewclean <- tm_map(reviewclean, tolower)
+myStopwords = readLines("stopwords-en.txt")
+reviewclean <- tm_map(reviewclean,removeWords,myStopwords)
+
+dataframe<-data.frame(text=unlist(sapply(reviewclean, `[`)), stringsAsFactors=F)
+write.csv(dataframe,file = 'nreviewclean.csv')
+
+nreviewData <- read.csv("nreviewclean.csv",stringsAsFactors = FALSE)
+nreview <- as.character(nreviewData$text)
+ns <- get_nrc_sentiment(nreview)
+
+    if(chart[1] == input$chart){
+      review_combine <- cbind(nreviewData$text ,ns) 
+      par(mar=rep(3,4))
+      barplot(colSums(ns), col = rainbow(10), main='Sentiment Analysys Donald Trump on Twitter')
+    }
+    
+    else if(chart[2] == input$chart){
+      nslices <- c(colSums(ns))
+      nlbls <- c("Anger", "Anticipation", "Disgust", "Fear", "Joy", "Sadness", "surprise", "Trust", "Negative", "Positive")
+      npct <- round(nslices/sum(nslices)*100)
+      nlbls <- paste(nlbls, npct, sep = " ")
+      nlbls <- paste(nlbls,"%", sep = "")
+
+    npiechart = pie(nslices,labels = nlbls, col=rainbow(length(nlbls)),
+    main="Pie Chart Sentiment Analysys Emotions")
+    }
+    
+    else if(chart[3] == input$chart){
+    ndf<-read.csv("nreviewclean.csv",stringsAsFactors = FALSE)
+    glimpse(df)
+
+    #Set the seed of R‘s random number generator, which is useful for creating simulations or random objects that can be reproduced.
+    set.seed(20)
+    ndf<-ndf[sample(nrow(ndf)),]
+    ndf<-ndf[sample(nrow(ndf)),]
+    glimpse(ndf)
+
+    ncorpus<-Corpus(VectorSource(ndf$text))
+    inspect(ncorpus[1:10])
+    #fungsinya untuk membersihkan data data yang tidak dibutuhkan 
+    corpus.clean<-ncorpus%>%
+    tm_map(content_transformer(tolower))%>%
+    tm_map(removePunctuation)%>%
+    tm_map(removeNumbers)%>%
+    tm_map(removeWords,stopwords(kind="en"))%>%
+    tm_map(stripWhitespace)
+    
+    ndtm<-DocumentTermMatrix(corpus.clean)
+
+    inspect(ndtm[1:10,1:20])
+
+    ndf.train<-ndf[1:50,]
+    ndf.test<-ndf[51:100,]
+
+    ndtm.train<-dtm[1:50,]
+    ndtm.test<-dtm[51:100,]
+
+    corpus.clean.train<-corpus.clean[1:50]
+    corpus.clean.test<-corpus.clean[51:100]
+
+    dim(ndtm.train)
+    fivefreq<-findFreqTerms(ndtm.train,5)
+    length(fivefreq)
+
+    ndtm.train.nb<-DocumentTermMatrix(corpus.clean.train,control = list(dictionary=fivefreq))
+
+    ndtm.test.nb<-DocumentTermMatrix(corpus.clean.test,control = list(dictionary=fivefreq))
+
+    dim(ndtm.test.nb)
+ 
+convert_count <- function(x){
+    y<-ifelse(x>0,1,0)
+    y<-factor(y,levels=c(0,1),labels=c("no","yes"))
+    y
+}
+    trainNB<-apply(ndtm.train.nb,2,convert_count)
+    testNB<-apply(ndtm.test.nb,1,convert_count)
+    wordcloud(corpus.clean, min.freq = 4, scale = (c(6,0.7)) ,max.words=100,random.order=F,colors=brewer.pal(8,"Dark2"))
+
+    }
+    
+
+  },height = 600, width = 800)
+  
+
+}
+
+```
+
+```{r run}
+shinyApp(ui = ui, server = server)
+```
